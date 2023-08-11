@@ -1,0 +1,7 @@
+{
+    "C_Cpp.default.systemIncludePath": [],
+    "files.associations": {
+        "*.yml": "yaml",
+        "*.tcc": "cpp"
+    }
+}
