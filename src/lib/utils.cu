@@ -1,6 +1,7 @@
+#include "cudnn.h"
 #include "utils.cuh"
 
-void print2DArray(float *arr, int rows, int cols) {
+void print2DArray(float* arr, int rows, int cols) {
     printf("[\n");
     for (int i = 0; i < rows; i++) {
         printf("[");

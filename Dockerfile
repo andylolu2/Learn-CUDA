@@ -1,8 +1,9 @@
-FROM nvcr.io/nvidia/nvhpc:23.5-devel-cuda_multi-ubuntu20.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 ARG USERNAME=dockeruser
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && \
     apt install -y software-properties-common && \

@@ -8,6 +8,10 @@ Flags that I missed:
 - `-l` / `--library`: To include cuda libraries like `CuBLAS` / `CUTLASS`. E.g. `-l=cublas,cublasLt`.
 - `-gencode`: Specify which device you are compiling for. Needed to get things like Tensor Core GEMM working. E.g. `-gencode=arch=compute_75,code=sm_75`.
 
+### Hardward support
+
+RTX 2060 only supports Tensor Core MatMuls with FP16 inputs and FP32 compute dtype. Using either FP16 / FP32 for both inputs and compute dtype will fail.
+
 ## Discoveries
 
 ### TFLOPS
