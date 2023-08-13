@@ -1,44 +1,33 @@
 #include <cudnn_frontend.h>
+#include <cudnn_frontend_find_plan.h>
+#include <cudnn_frontend_get_plan.h>
 
 #include <array>
 #include <iostream>
 
 #include "lib/utils.cuh"
 
-bool allowAll(cudnnBackendDescriptor_t engine_config) {
-    (void)engine_config;
-    return false;
-}
-
-cudnn_frontend::ExecutionPlan
-get_plan_from_heuristics(cudnn_frontend::OperationGraph &opGraph, cudnnHandle_t handle) {
+// Method for engine config generator based on heuristics
+auto heurgen_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_frontend::EngineConfigList {
     auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
                           .setOperationGraph(opGraph)
-                          .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                          .setHeurMode(CUDNN_HEUR_MODE_A)
                           .build();
+    std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
 
-    auto &engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+    auto &engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+    return engine_configs;
+};
 
-    auto plan_builder = [&]() -> cudnn_frontend::ExecutionPlan {
-        for (auto &ecfg : engine_config) {
-            try {
-                auto plan = cudnn_frontend::ExecutionPlanBuilder()
-                                .setHandle(handle)
-                                .setEngineConfig(ecfg, opGraph.getTag())
-                                .build();
-                return plan;
-            } catch (cudnn_frontend::cudnnException &e) {
-                continue;
-            }
-        }
-        return cudnn_frontend::ExecutionPlanBuilder()
-            .setHandle(handle)
-            .setEngineConfig(engine_config[0], opGraph.getTag())
-            .build();
-    };
-
-    return plan_builder();
-}
+// Method for engine config generator based on fallback list
+auto fallback_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_frontend::EngineConfigList {
+    auto fallback = cudnn_frontend::EngineFallbackListBuilder()
+                        .setOperationGraph(opGraph)
+                        // .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                        .build();
+    auto &fallback_list = fallback.getFallbackList();
+    return fallback_list;
+};
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
@@ -81,14 +70,9 @@ int main(int argc, char *argv[]) {
                        .setDataType(CUDNN_DATA_HALF)
                        .build();
 
-    std::cout << xTensor.describe() << std::endl;
-    std::cout << yTensor.describe() << std::endl;
-    std::cout << cTensor.describe() << std::endl;
-
     auto matmulDesc = cudnn_frontend::MatMulDescBuilder()
-                          .setComputeType(CUDNN_DATA_FLOAT)
+                          .setComputeType(CUDNN_DATA_HALF)
                           .build();
-    std::cout << matmulDesc.describe() << std::endl;
 
     auto matmulOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
                         .setaMatDesc(xTensor)
@@ -96,7 +80,6 @@ int main(int argc, char *argv[]) {
                         .setcMatDesc(cTensor)
                         .setmatmulDesc(matmulDesc)
                         .build();
-    std::cout << matmulOp.describe() << std::endl;
 
     std::array<cudnn_frontend::Operation const *, 1> ops = {&matmulOp};
 
@@ -104,20 +87,6 @@ int main(int argc, char *argv[]) {
                        .setHandle(handle)
                        .setOperationGraph(ops.size(), ops.data())
                        .build();
-    std::cout << opGraph.describe() << std::endl;
-
-    auto plan = get_plan_from_heuristics(opGraph, handle);
-    std::shared_ptr<cudnn_frontend::ExecutionPlan> inputProjLayerPlan = std::make_shared<cudnn_frontend::ExecutionPlan>(std::move(plan));
-
-    std::cout << "[INFO] Execution Plan tag for input projection layer: " << inputProjLayerPlan->getTag() << std::endl;
-
-    auto workspace_size = plan.getWorkspaceSize();
-    std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
-
-    void *workspace_ptr = nullptr;
-    if (workspace_size > 0) {
-        checkCudaStatus(cudaMalloc(&workspace_ptr, (size_t)workspace_size));
-    }
 
     size_t xSize = N * N * sizeof(half);
     size_t ySize = N * N * sizeof(half);
@@ -132,11 +101,18 @@ int main(int argc, char *argv[]) {
     int64_t uids[] = {'x', 'y', 'c'};
 
     auto variantPack = cudnn_frontend::VariantPackBuilder()
-                           .setWorkspacePointer(workspace_ptr)
                            .setDataPointers(3, data_ptrs)
                            .setUids(3, uids)
                            .build();
     std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+    std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
+    cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
+
+    auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE>(
+        handle, opGraph, variantPack);
+    cudnn_frontend::ExecutionPlan plan = options.front();
+    std::cout << "Plan chosen: " << plan.getTag() << std::endl;
 
     cudaEvent_t start, end;
     cudaEventCreate(&start);
@@ -164,7 +140,6 @@ int main(int argc, char *argv[]) {
     checkCudaStatus(cudaFree(x_ptr));
     checkCudaStatus(cudaFree(y_ptr));
     checkCudaStatus(cudaFree(c_ptr));
-    checkCudaStatus(cudaFree(workspace_ptr));
     checkCudnnErr(cudnnDestroy(handle));
     return 0;
 }

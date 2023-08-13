@@ -10,7 +10,11 @@ Flags that I missed:
 
 ### Hardward support
 
-RTX 2060 only supports Tensor Core MatMuls with FP16 inputs and FP32 compute dtype. Using either FP16 / FP32 for both inputs and compute dtype will fail.
+RTX 2060 only supports Tensor Core MatMuls with FP16 inputs and FP16/32 compute dtype. Using FP32 for both inputs and compute dtype will fail.
+
+## CuDNN find plan
+
+`cudnnFindPlan` doesn't always get the correct plan, quite annoying.
 
 ## Discoveries
 

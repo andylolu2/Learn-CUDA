@@ -4,7 +4,6 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/src",
-                "/opt/nvidia/hpc_sdk/Linux_x86_64/23.5/math_libs/lib64",
                 "${workspaceFolder}/src/cutlass/include",
                 "${workspaceFolder}/src/cutlass/tools/util/include",
                 "${workspaceFolder}/src/cudnn-frontend/include"
