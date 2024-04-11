@@ -10,13 +10,14 @@ $(BIN)/%: $(DIR)/%.cu $(wildcard $(DIR)/lib/*.cu) $(wildcard $(DIR)/lib/*.cuh)
 	nvcc --std=c++17 \
 	-I=src/cudnn-frontend/include \
 	-I=src/cutlass/include,src/cutlass/tools/util/include \
-	-l=cudnn \
+	-l=cudnn,cublas,cublasLt \
 	-gencode=arch=compute_75,code=sm_75 \
 	$(DIR)/lib/*.cu $< \
 	-o $@
 
 %: $(BIN)/%
-	ncu -o $(PROFILE)/$@ -f $(BIN)/$@
+	# ncu -o $(PROFILE)/$@ -f $(BIN)/$@
+	$(BIN)/$@
 
 	# nvcc -l=cublas,cublasLt $(DIR)/lib/*.cu $< -o $@
 
